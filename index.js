@@ -1,4 +1,5 @@
 var http = require('http');
+var Layer = require('./lib/layer');
 
 module.exports = function() {
 
@@ -15,34 +16,39 @@ module.exports = function() {
             count++;
         };
         while (index < app.stack.length && count == index) {
-            var m = app.stack[index++];
-            if (m.hasOwnProperty('use')) { // middleware is a subapp
-                var subapp = m;
-                console.log(subapp);
-                var temp = index;
-                subapp.stack.forEach(function(_m) {
-                    app.stack.splice(temp++, 0, _m);
-                });
-                count++;
-                continue;
-            }
-            if (!existsError) {
-                try {
-                    if (m.length == 4) { // if there's an error, skip error middlewares
-                        count++;
-                        continue;
-                    }
-                    m(req, res, _next);
-                } catch (e) {
-                    console.log(e);
-                    existsError = true;
-                }
-            } else {
-                if (m.length == 3) { // skip normal middlewares
+            var layer = app.stack[index++];
+            if (layer.match(req.url) && layer.match(req.url).hasOwnProperty("path")) {
+                var m = layer.handle;
+                if (m.hasOwnProperty('use')) { // middleware is a subapp
+                    var subapp = m;
+                    console.log(subapp);
+                    var temp = index;
+                    subapp.stack.forEach(function(_m) {
+                        app.stack.splice(temp++, 0, _m);
+                    });
                     count++;
                     continue;
                 }
-                m(err, req, res, _next);
+                if (!existsError) {
+                    try {
+                        if (m.length == 4) { // if there's an error, skip error middlewares
+                            count++;
+                            continue;
+                        }
+                        m(req, res, _next);
+                    } catch (e) {
+                        console.log(e);
+                        existsError = true;
+                    }
+                } else {
+                    if (m.length == 3) { // skip normal middlewares
+                        count++;
+                        continue;
+                    }
+                    m(err, req, res, _next);
+                }
+            } else {
+                _next(err);
             }
         }
         if (!existsError) {
@@ -50,6 +56,8 @@ module.exports = function() {
         } else {
             res.statusCode = 500;
         }
+
+        
         res.end();
     };
 
@@ -61,8 +69,15 @@ module.exports = function() {
 
     app.stack = [];
 
-    app.use = function(middleware) {
-        app.stack.push(middleware);
+    app.use = function(path, middleware) {
+        var layer;
+        if (typeof(path) == "function") {
+            middleware = path;   // here path is a middleware
+            layer = new Layer("/", middleware);
+        } else {
+            layer = new Layer(path, middleware);
+        }
+        app.stack.push(layer);
     };
 
     return app;
