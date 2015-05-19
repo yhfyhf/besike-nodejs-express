@@ -15,9 +15,16 @@ module.exports = function() {
             }
             count++;
         };
+        var end;
         while (index < app.stack.length && count == index) {
             var layer = app.stack[index++];
             if (layer.match(req.url) && layer.match(req.url).hasOwnProperty("path")) {
+                var params = layer.match(req.url).params;
+                if (params.hasOwnProperty('a')) {
+                    end = params['a'];
+                } else {
+                    end = "undefined";
+                }
                 var m = layer.handle;
                 if (m.hasOwnProperty('use')) { // middleware is a subapp
                     var subapp = m;
@@ -58,7 +65,7 @@ module.exports = function() {
         }
 
         
-        res.end();
+        res.end(end);
     };
 
     app.listen = function(port, done) {
