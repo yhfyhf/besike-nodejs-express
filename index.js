@@ -18,44 +18,46 @@ module.exports = function() {
         var end;
         while (index < app.stack.length && count == index) {
             var layer = app.stack[index++];
+            var m;
+            console.log(req.url);
             if (layer.match(req.url) && layer.match(req.url).hasOwnProperty("path")) {
                 var params = layer.match(req.url).params;
                 if (params.hasOwnProperty('a')) {
                     end = params['a'];
                 } else {
-                    end = "undefined";
+                    end = "";
                 }
-                var m = layer.handle;
-                if (m.hasOwnProperty('use')) { // middleware is a subapp
-                    var subapp = m;
-                    console.log(subapp);
-                    var temp = index;
-                    subapp.stack.forEach(function(_m) {
-                        app.stack.splice(temp++, 0, _m);
-                    });
-                    count++;
-                    continue;
-                }
-                if (!existsError) {
-                    try {
-                        if (m.length == 4) { // if there's an error, skip error middlewares
-                            count++;
-                            continue;
-                        }
-                        m(req, res, _next);
-                    } catch (e) {
-                        console.log(e);
-                        existsError = true;
-                    }
-                } else {
-                    if (m.length == 3) { // skip normal middlewares
+                m = layer.handle;
+            } else {
+                m = layer;
+            }
+            if (m.hasOwnProperty('use')) { // middleware is a subapp
+                var subapp = m;
+                console.log(subapp);
+                var temp = index;
+                subapp.stack.forEach(function(_m) {
+                    app.stack.splice(temp++, 0, _m);
+                });
+                count++;
+                continue;
+            }
+            if (!existsError) {
+                try {
+                    if (m.length == 4) { // if there's an error, skip error middlewares
                         count++;
                         continue;
                     }
-                    m(err, req, res, _next);
+                    m(req, res, _next);
+                } catch (e) {
+                    console.log(e);
+                    existsError = true;
                 }
             } else {
-                _next(err);
+                if (m.length == 3) { // skip normal middlewares
+                    count++;
+                    continue;
+                }
+                m(err, req, res, _next);
             }
         }
         if (!existsError) {
@@ -64,8 +66,10 @@ module.exports = function() {
             res.statusCode = 500;
         }
 
-        
         res.end(end);
+    };
+
+    app.handle = function(req, res, next) {
     };
 
     app.listen = function(port, done) {
